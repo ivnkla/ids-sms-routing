@@ -1,5 +1,6 @@
 public class Packet {
     int from;
     int to;
-    int [] payload;
+    String message;
+    int msgId
 }
