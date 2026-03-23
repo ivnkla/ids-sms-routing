@@ -1,14 +1,14 @@
+import java.awt.*;
+
 public class Utils {
     
-    public static int distance(Point p1, Point p2) {
+    public static double distance(Point p1, Point p2) {
 
-        int d = sqrt( (p2.x - p1.x)**2 +  (p2.y - p1.y)**2 )
-
-        return d;
+      return Math.sqrt( Math.pow((p2.x - p1.x),2) +  Math.pow((p2.y - p1.y),2));
     }
 
     public static boolean IsCircleIntersection(Point c1, Point c2, int r1, int r2 ){
-            return (distance(c1,c2) <= r1 + r2)
+            return (distance(c1,c2) <= r1 + r2);
     }
 
 
@@ -23,4 +23,4 @@ public class Utils {
 //        }
 
     }
-}
+

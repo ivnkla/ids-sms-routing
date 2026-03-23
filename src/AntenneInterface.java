@@ -1,3 +1,5 @@
+import java.awt.*;
+
 public interface AntenneInterface {
 
     void sendMessage(Packet p);
