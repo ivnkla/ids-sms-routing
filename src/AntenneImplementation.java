@@ -1,5 +1,3 @@
-package src;
-
 import com.rabbitmq.client.Channel;
 
 import com.rabbitmq.client.Connection;
@@ -11,6 +9,8 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Map;
 import java.util.Scanner;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeoutException;
 
 
@@ -39,14 +39,16 @@ public class AntenneImplementation implements AntenneInterface {
 	private ArrayList<String> inQueues;
 	private ArrayList<String> outQueues;
 	
-	private Integer[] acknowledgeMsg;
-	
 	/*
 	 * RabbitMQ attributes
 	 */
 	private Connection connection;
 	private Channel channel;
-	private DeliverCallback deliverCallback;
+	/*
+	 * Tracks already seen packets to prevent broadcast loops.
+	 * A packet is identified by "from-msgId".
+	 */
+	private Set<String> seenMessages = ConcurrentHashMap.newKeySet();
 
 
     public AntenneImplementation(Integer x, Integer y, Integer r, Integer idAntenne, Boolean[][] matNeighbours) throws IOException, TimeoutException {
@@ -106,13 +108,26 @@ public class AntenneImplementation implements AntenneInterface {
 			}
 			
 			/*
-			 * Callback that handle the packets
+			 * Callback that handle the packet
 			 */
 			DeliverCallback deliverCallback = (consumerTag, delivery) -> {
                 channel.basicAck(delivery.getEnvelope().getDeliveryTag(), false); // not sure of that
 				Packet p;
 				try {
 					p = Packet.deserialize(delivery.getBody());
+					
+					/*
+					 * First check if the message has already been seen once
+					 */
+					String msgKey = p.getFrom() + "-" + p.getMsgId();
+					if (!seenMessages.add(msgKey)) {
+						System.out.println("[~] Duplicate dropped : " + msgKey);
+						return;
+					}
+					
+					/*
+					 * Then checks the own of the message
+					 */
 					if (p.getTo() == this.id) {
 						System.out.println("[x] Received : " + p);
 					} else {
