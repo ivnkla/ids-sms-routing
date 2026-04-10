@@ -1,0 +1,14 @@
+#!/bin/bash
+
+CONTAINER_NAME="rabbitmq-ids"
+CONTAINERS=$(docker ps -q --filter "name=^${CONTAINER_NAME}$")
+
+if [ -z "$CONTAINERS" ]; then
+    echo "[!] Aucune instance RabbitMQ en cours d'exécution."
+    exit 0
+fi
+
+echo "[*] Arrêt des instances RabbitMQ..."
+docker stop $CONTAINER_NAME
+docker rm $CONTAINER_NAME
+echo "[+] Instances arrêtées et supprimées."
