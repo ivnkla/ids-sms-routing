@@ -235,13 +235,21 @@ public class AntenneImplementation implements AntenneInterface {
 			System.out.print("> ");
 			String line = scanner.nextLine().trim();
 			if (line.isEmpty()) continue;
+
 			String[] parts = line.split(" ", 2);
+
 			if (parts.length < 2) {
+				switch (parts[0]){
+					case "quit":
+						System.out.println("Destructionn de l'antenne");
+						System.exit(0);
+				}
+
 				System.out.println("[!] Format attendu : <id_destinataire> <message>");
 				continue;
 			}
 			int to = Integer.parseInt(parts[0]);
 			antenne.broadcastMessage(new Packet(id, to, parts[1], msgId++));
 		}
-	}
+    }
 }
