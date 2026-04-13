@@ -107,70 +107,65 @@ public class AntenneImplementation implements AntenneInterface {
 				channel.queueDeclare(queue, durable, exclusive, autoDelete, arguments);
 			}
 			
-			/*
-			 * Callback that handle the packet
-			 */
-			DeliverCallback deliverCallback = (consumerTag, delivery) -> {
-                channel.basicAck(delivery.getEnvelope().getDeliveryTag(), false); // not sure of that
-				Packet p;
-				try {
-					p = Packet.deserialize(delivery.getBody());
-					
-					/*
-					 * First check if the message has already been seen once
-					 */
-					String msgKey = p.getFrom() + "-" + p.getMsgId();
-					if (!seenMessages.add(msgKey)) {
-						System.out.println("[~] Duplicate dropped : " + msgKey);
-						return;
-					}
-					
-					/*
-					 * Then checks the own of the message
-					 */
-					if (p.getTo() == this.id) {
-						System.out.println("[x] Received : " + p);
-					} else {
-						relayMessage(p);
-						System.out.println("[-] Relaying ");
-					}
-				} catch (ClassNotFoundException e) {
-					// TODO Auto-generated catch block
-					e.printStackTrace();
-				}
-	        };
-	        
-			/*
-			 * Create a single listening thread for each inQueue
-			 */
-			boolean autoAck = false;
-			for (String inQueue : inQueues) {
-			    Thread listener = new Thread(() -> {
-			        try {
-			            channel.basicConsume(inQueue, autoAck, deliverCallback, consumertag -> {});
-			        } catch (IOException e) {
-			            e.printStackTrace();
-			        }
-			    });
-			    listener.setName("listener-" + inQueue);
-			    listener.setDaemon(true);
-			    listener.start();
-			}
-
+			initCommunication();
     }
 
 	@Override
-	public void sendMessage(Packet p) {
-		relayMessage(p);
-	}
-
-	@Override
-	public void receiveMessage() {
+	public void initCommunication() {
 		// TODO Auto-generated method stub
+		// TODO Factorise function
+		/*
+		 * Callback that handle the packet
+		 */
+		DeliverCallback deliverCallback = (consumerTag, delivery) -> {
+            channel.basicAck(delivery.getEnvelope().getDeliveryTag(), false); // not sure of that
+			Packet p;
+			try {
+				p = Packet.deserialize(delivery.getBody());
+				
+				/*
+				 * First check if the message has already been seen once
+				 */
+				String msgKey = p.getFrom() + "-" + p.getMsgId();
+				if (!seenMessages.add(msgKey)) {
+					System.out.println("[~] Duplicate dropped : " + msgKey);
+					return;
+				}
+				
+				/*
+				 * Then checks the own of the message
+				 */
+				if (p.getTo() == this.id) {
+					System.out.println("[x] Received : " + p);
+				} else {
+					broadcastMessage(p);
+					System.out.println("[-] Relaying ");
+				}
+			} catch (ClassNotFoundException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+        };
+        
+		/*
+		 * Create a single listening thread for each inQueue
+		 */
+		boolean autoAck = false;
+		for (String inQueue : inQueues) {
+		    Thread listener = new Thread(() -> {
+		        try {
+		            channel.basicConsume(inQueue, autoAck, deliverCallback, consumertag -> {});
+		        } catch (IOException e) {
+		            e.printStackTrace();
+		        }
+		    });
+		    listener.setName("listener-" + inQueue);
+		    listener.setDaemon(true);
+		    listener.start();
+		}
 	}
 
-	@Override
-	public void relayMessage(Packet p) {
+	public void broadcastMessage(Packet p) {
 		int from = p.getFrom();
 		String QUEUE_FROM_OUT = "queue-" + this.id + "-" + from;
 		for (String outQueue : outQueues) {
@@ -184,12 +179,6 @@ public class AntenneImplementation implements AntenneInterface {
 			}
 		}
 	}
-
-	@Override
-	public boolean isNeighbor(Point p1, Point p2) {
-		return false;
-	}
-
 
 	/*
 	 * This method fills the derived attribute
@@ -252,7 +241,7 @@ public class AntenneImplementation implements AntenneInterface {
 				continue;
 			}
 			int to = Integer.parseInt(parts[0]);
-			antenne.sendMessage(new Packet(id, to, parts[1], msgId++));
+			antenne.broadcastMessage(new Packet(id, to, parts[1], msgId++));
 		}
 	}
 }
