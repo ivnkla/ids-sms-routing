@@ -31,18 +31,23 @@ public class Utils {
              */
             int n = Integer.parseInt(br.readLine().trim());
             cfg.antennas = new int[n][3];
-            for (int i = 0; i < n; i++) {
+            int i = 0;
+            for (i = 0; i < n; i++) {
                 String[] parts = br.readLine().trim().split("\\s+");
+                if (parts.length != 3){
+                    throw new IOException("Erreur format du fichier");
+                }
                 cfg.antennas[i][0] = Integer.parseInt(parts[0]); // x
                 cfg.antennas[i][1] = Integer.parseInt(parts[1]); // y
                 cfg.antennas[i][2] = Integer.parseInt(parts[2]); // r
             }
 
+
             /*
              * We then build the adjacent matrix
              */
             cfg.matrix = new Boolean[n][n];
-            for (int i = 0; i < n; i++) {
+            for (i = 0; i < n; i++) {
                 for (int j = 0; j < n; j++) {
                     if (i == j) {
                         cfg.matrix[i][j] = false;
@@ -53,6 +58,8 @@ public class Utils {
                     }
                 }
             }
+        } catch (NullPointerException e){
+            throw new NullPointerException("Erreur nombre d'antennes déclariées différent du nombre d'antennes défini ");
         }
 
         return cfg;
