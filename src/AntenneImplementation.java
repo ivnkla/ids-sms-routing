@@ -106,13 +106,10 @@ public class AntenneImplementation implements AntenneInterface {
 		}
 
 		/*
-		 * Declare queues for each local phone:
-		 *   queue-phone-{id}    : delivery (antenna -> phone)
-		 *   queue-phone-{id}-in : send     (phone -> antenna)
+		 * Declare a delivery queue for each local phone
 		 */
 		for (int globalPhoneId : localPhoneIds) {
 			channel.queueDeclare("queue-phone-" + globalPhoneId, durable, exclusive, autoDelete, null);
-			channel.queueDeclare("queue-phone-" + globalPhoneId + "-in", durable, exclusive, autoDelete, null);
 		}
 
 		initCommunication();
@@ -173,21 +170,6 @@ public class AntenneImplementation implements AntenneInterface {
 		listener.setDaemon(true);
 		listener.start();
 
-		/*
-		 * One listening thread per local phone's inbound queue
-		 */
-		for (int globalPhoneId : localPhoneIds) {
-			String phoneInQueue = "queue-phone-" + globalPhoneId + "-in";
-			Thread phoneListener = new Thread(() -> {
-				try {
-					channel.basicConsume(phoneInQueue, false, deliverCallback, tag -> {});
-				} catch (IOException e) {
-					e.printStackTrace();
-				}
-			});
-			phoneListener.setDaemon(true);
-			phoneListener.start();
-		}
 	}
 
 	@Override

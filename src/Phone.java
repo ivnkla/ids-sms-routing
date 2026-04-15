@@ -146,7 +146,7 @@ public class Phone {
 
             int destGlobalId = cfg.nAntennas + destLocalId;
             Packet p = new Packet(globalPhoneId, destGlobalId, parts[0], msgId++);
-            channel.basicPublish("", "queue-phone-" + globalPhoneId + "-in", null, Packet.serialize(p));
+            channel.basicPublish("ex-" + antennaId, "", null, Packet.serialize(p));
             System.out.println("[~] Envoyé via antenne " + antennaId);
         }
     }
