@@ -8,6 +8,8 @@ public class Utils {
     public static class Config {
         public Boolean[][] matrix;
         public int[][] antennas; // [id] -> [x, y, r]
+        public int[][] phones;   // [localId] -> [x, y]
+        public int nAntennas;    // phone global ID = nAntennas + localId
     }
 
     /*
@@ -30,6 +32,7 @@ public class Utils {
              * We first save the relative positions for future
              */
             int n = Integer.parseInt(br.readLine().trim());
+            cfg.nAntennas = n;
             cfg.antennas = new int[n][3];
             int i = 0;
             for (i = 0; i < n; i++) {
@@ -58,11 +61,48 @@ public class Utils {
                     }
                 }
             }
+            /*
+             * Parse the optional phones section
+             */
+            String phonesLine = br.readLine();
+            if (phonesLine != null && !phonesLine.trim().isEmpty()) {
+                int m = Integer.parseInt(phonesLine.trim());
+                cfg.phones = new int[m][2];
+                for (i = 0; i < m; i++) {
+                    String[] parts = br.readLine().trim().split("\\s+");
+                    if (parts.length != 2)
+                        throw new IOException("Erreur format du fichier (section téléphones)");
+                    cfg.phones[i][0] = Integer.parseInt(parts[0]); // x
+                    cfg.phones[i][1] = Integer.parseInt(parts[1]); // y
+                }
+            } else {
+                cfg.phones = new int[0][2];
+            }
+
         } catch (NullPointerException e){
             throw new NullPointerException("Erreur nombre d'antennes déclariées différent du nombre d'antennes défini ");
         }
 
         return cfg;
+    }
+
+    /*
+     * Returns the ID of the nearest antenna covering position (x, y),
+     * or -1 if no antenna is in range.
+     */
+    public static int findNearestAntennaInRange(int x, int y, int[][] antennas) {
+        int best = -1;
+        double bestDist = Double.MAX_VALUE;
+        for (int i = 0; i < antennas.length; i++) {
+            Point phone   = new Point(x, y);
+            Point antenna = new Point(antennas[i][0], antennas[i][1]);
+            double d = distance(phone, antenna);
+            if (d <= antennas[i][2] && d < bestDist) {
+                bestDist = d;
+                best = i;
+            }
+        }
+        return best;
     }
     
     /*

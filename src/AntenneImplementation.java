@@ -37,6 +37,13 @@ public class AntenneImplementation implements AntenneInterface {
 	private ArrayList<Integer> neighbours;
 
 	/*
+	 * Global IDs of phones covered by this antenna.
+	 * A phone's global ID = nAntennas + localPhoneId.
+	 */
+	private ArrayList<Integer> localPhoneIds;
+	private int nAntennas;
+
+	/*
 	 * RabbitMQ attributes
 	 */
 	private Connection connection;
@@ -48,7 +55,7 @@ public class AntenneImplementation implements AntenneInterface {
 	private Set<String> seenMessages = ConcurrentHashMap.newKeySet();
 
 
-    public AntenneImplementation(Integer x, Integer y, Integer r, Integer idAntenne, Boolean[][] matNeighbours) throws IOException, TimeoutException {
+    public AntenneImplementation(Integer x, Integer y, Integer r, Integer idAntenne, Boolean[][] matNeighbours, int nAntennas, int[][] phones) throws IOException, TimeoutException {
 
     	/*
     	 * Fill the basic attributes
@@ -58,9 +65,12 @@ public class AntenneImplementation implements AntenneInterface {
 		this.r = r;
     	this.id = idAntenne;
     	this.matrice = matNeighbours;
+    	this.nAntennas = nAntennas;
 
     	neighbours = new ArrayList<Integer>();
+    	localPhoneIds = new ArrayList<Integer>();
 		generateNeighbours();
+		findLocalPhones(phones);
 
 		/*
 		 * Connect to RabbitMQ
@@ -95,6 +105,16 @@ public class AntenneImplementation implements AntenneInterface {
 			channel.queueBind("queue-" + this.id, "ex-" + n, "");
 		}
 
+		/*
+		 * Declare queues for each local phone:
+		 *   queue-phone-{id}    : delivery (antenna -> phone)
+		 *   queue-phone-{id}-in : send     (phone -> antenna)
+		 */
+		for (int globalPhoneId : localPhoneIds) {
+			channel.queueDeclare("queue-phone-" + globalPhoneId, durable, exclusive, autoDelete, null);
+			channel.queueDeclare("queue-phone-" + globalPhoneId + "-in", durable, exclusive, autoDelete, null);
+		}
+
 		initCommunication();
     }
 
@@ -116,10 +136,20 @@ public class AntenneImplementation implements AntenneInterface {
 				}
 
 				/*
-				 * Then checks the own of the message
+				 * Then checks the destination of the packet
 				 */
 				if (p.getTo() == this.id) {
 					System.out.println("[x] Received : " + p);
+				} else if (p.getTo() >= this.nAntennas) {
+					// Destination is a phone
+					int destId = p.getTo();
+					if (localPhoneIds.contains(destId)) {
+						channel.basicPublish("", "queue-phone-" + destId, null, Packet.serialize(p));
+						System.out.println("[>] Livré au téléphone " + (destId - nAntennas) + " : \"" + p.getMessage() + "\"");
+					} else {
+						broadcastMessage(p);
+						System.out.println("[-] Relaying " + p);
+					}
 				} else {
 					broadcastMessage(p);
 					System.out.println("[-] Relaying " + p);
@@ -142,6 +172,22 @@ public class AntenneImplementation implements AntenneInterface {
 		listener.setName("listener-" + this.id);
 		listener.setDaemon(true);
 		listener.start();
+
+		/*
+		 * One listening thread per local phone's inbound queue
+		 */
+		for (int globalPhoneId : localPhoneIds) {
+			String phoneInQueue = "queue-phone-" + globalPhoneId + "-in";
+			Thread phoneListener = new Thread(() -> {
+				try {
+					channel.basicConsume(phoneInQueue, false, deliverCallback, tag -> {});
+				} catch (IOException e) {
+					e.printStackTrace();
+				}
+			});
+			phoneListener.setDaemon(true);
+			phoneListener.start();
+		}
 	}
 
 	@Override
@@ -151,6 +197,19 @@ public class AntenneImplementation implements AntenneInterface {
 			channel.basicPublish("ex-" + this.id, "", null, Packet.serialize(p)); // we publish onto the exchange, rmq does the job for us
 		} catch (IOException e) {
 			e.printStackTrace();
+		}
+	}
+
+	/*
+	 * Find phones whose position falls within this antenna's range.
+	 */
+	private void findLocalPhones(int[][] phones) {
+		for (int i = 0; i < phones.length; i++) {
+			Point phonePos   = new Point(phones[i][0], phones[i][1]);
+			Point antennaPos = new Point(this.x, this.y);
+			if (Utils.distance(antennaPos, phonePos) <= this.r) {
+				localPhoneIds.add(nAntennas + i);
+			}
 		}
 	}
 
@@ -175,14 +234,14 @@ public class AntenneImplementation implements AntenneInterface {
 		int y = cfg.antennas[id][1];
 		int r = cfg.antennas[id][2];
 
-		AntenneImplementation antenne = new AntenneImplementation(x, y, r, id, cfg.matrix);
+		AntenneImplementation antenne = new AntenneImplementation(x, y, r, id, cfg.matrix, cfg.nAntennas, cfg.phones);
 
 		System.out.println("[" + id + "] Antenne prête. Format : <id_destinataire> <message>");
 
 		Scanner scanner = new Scanner(System.in);
 		int msgId = 0;
 		while (true) {
-			System.out.print("> ");
+			System.out.print("antenne> ");
 			String line = scanner.nextLine().trim();
 			if (line.isEmpty()) continue;
 
@@ -201,7 +260,7 @@ public class AntenneImplementation implements AntenneInterface {
 			int to = Integer.parseInt(parts[0]);
 			Packet p = new Packet(id, to, parts[1], msgId++);
 			if (to == id) {
-				System.out.println("[x] Received : " + p);
+				System.out.println("[x] Received : " + p); // antenna send message to itslef without broadcasting
 			} else {
 				antenne.broadcastMessage(p);
 			}
